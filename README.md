@@ -442,3 +442,107 @@ Le système est conçu pour favoriser une **forte cohésion interne** au sein de
 
 Inversement, le **couplage externe** entre les microservices est minimisé et explicitement géré via les API. Le seul point de convergence est l'utilisation de la bibliothèque `shared_libs`, qui a pour unique vocation de standardiser les aspects transverses et non fonctionnels (sécurité, observabilité, etc.), sans introduire de dépendances sur la logique métier.
 
+
+---
+
+Absolument. Le texte que vous avez fourni explique une étape cruciale de la mise en place de l'environnement de développement local avant l'utilisation de Docker. Voici plusieurs versions corrigées et améliorées, de la plus simple à la plus détaillée, pour l'intégrer dans votre documentation.
+
+---
+
+
+Absolument. Voici la section de documentation que vous avez fournie, entièrement réorganisée et enrichie pour intégrer le processus d'initialisation de la base de données avec le `DatabaseManager` et le script `init_db.py`.
+
+Cette nouvelle version est plus précise et guide le développeur à travers le flux de travail correct, en insistant sur le fait que l'ORM écrit le SQL pour lui.
+
+---
+
+### **3. Mise en Place de l'Environnement de Développement Local (Sans Docker)**
+
+Cette procédure documente la configuration manuelle complète pour qu'un développeur puisse exécuter et tester un microservice sur sa machine locale. Elle couvre l'installation des dépendances, la création de la base de données et l'initialisation du schéma applicatif via l'ORM.
+
+**Philosophie :** L'objectif est de simuler l'architecture "une base de données par service" en local, en rendant chaque développeur responsable de l'environnement du ou des services sur lesquels il intervient.
+
+**Processus de Configuration :**
+
+Un développeur ayant récemment cloné le dépôt doit suivre les étapes ci-dessous pour chaque microservice qu'il souhaite exécuter.
+
+---
+
+#### **Étape 1 : Isolation des Dépendances**
+
+Il est impératif d'utiliser un environnement virtuel Python pour éviter les conflits de dépendances et garder un projet propre. Depuis la racine du projet :
+
+```bash
+python -m venv venv
+source venv/bin/activate  # Sur Linux/macOS
+# venv\Scripts\activate    # Sur Windows
+```
+
+---
+
+#### **Étape 2 : Installation des Dépendances Spécifiques au Service**
+
+Chaque microservice est autonome et déclare ses propres dépendances dans un fichier `requirements.txt`. Le développeur doit se positionner dans le répertoire du service cible et exécuter l'installation.
+
+*Exemple pour `service-medical` :*
+```bash
+cd service-medical/
+pip install -r requirements.txt
+```
+Cette commande n'installera que les bibliothèques nécessaires au fonctionnement du service médical.
+
+---
+
+#### **Étape 3 : Préparation et Initialisation de la Base de Données**
+
+Cette étape cruciale se déroule en trois temps : la création manuelle d'une base de données **vide**, la configuration de la connexion, et la création **automatisée** des tables par l'ORM.
+
+**3.1. Création de la Base de Données Vide (Opération Manuelle)**
+
+C'est la **seule action SQL manuelle** que vous aurez à faire. Connectez-vous à votre instance PostgreSQL et créez une base de données vide ainsi qu'un utilisateur dédié pour le service.
+
+*Exemple de commandes SQL pour `service-medical` :*
+```sql
+CREATE DATABASE hospital_medical_db;
+CREATE USER medical_user WITH PASSWORD 'un_mot_de_passe_securise';
+GRANT ALL PRIVILEGES ON DATABASE hospital_medical_db TO medical_user;
+```
+
+**3.2. Configuration de la Connexion (`.env`)**
+
+À la racine du dossier de votre service (ex: dans `service-medical/`), créez un fichier nommé `.env`. Ce fichier indiquera à votre application comment se connecter à la base de données que vous venez de créer.
+
+*Contenu du fichier `/service-medical/.env` :*```
+DATABASE_URL="postgresql://medical_user:un_mot_de_passe_securise@localhost:5432/hospital_medical_db"
+JWT_SECRET_KEY="une_cle_secrete_pour_le_developpement"
+```
+
+**3.3. Création Automatisée des Tables (via le Script `init_db.py`)**
+
+Maintenant que la base de données vide existe et que l'application sait s'y connecter, nous allons demander à l'ORM SQLAlchemy de créer les tables pour nous. **Vous n'écrirez jamais `CREATE TABLE` manuellement.**
+
+*   **Comment ça marche ?** Le script `init_db.py` (à créer si besoin dans le dossier `src/` du service) importe vos modèles Python (ex: `Consultation`, `DossierMedical`). L'ORM analyse ces classes et génère automatiquement le code SQL pour créer les tables correspondantes.
+
+*   **Exécutez le script** depuis la **racine du projet** (`projet-hospitalier/`) :
+    ```bash
+    python service-medical/src/init_db.py
+    ```
+
+*   **Résultat :** Après l'exécution du script, votre base de données `hospital_medical_db` contiendra toutes les tables nécessaires (`consultations`, `dossiers_medicaux`, etc.), créées avec les bonnes colonnes et les bons types, sans que vous ayez écrit une seule ligne de SQL.
+
+*(Note : vous trouverez un template pour le script `init_db.py` dans la documentation détaillée de l'architecture.)*
+
+---
+
+#### **Étape 4 : Lancement du Service**
+
+Votre environnement est maintenant prêt : les dépendances sont installées et la base de données est initialisée. Vous pouvez lancer le serveur web.
+
+Pour que les importations depuis `shared_libs` fonctionnent, il est essentiel de configurer le `PYTHONPATH`. L'exécution se fait depuis le répertoire `src` du service.
+
+```bash
+cd service-medical/src/
+PYTHONPATH=../../ python3 main.py
+```
+
+Le service devrait maintenant démarrer sans erreur et être accessible, par exemple, sur `http://localhost:8003`. Il est connecté à une base de données locale, propre et entièrement initialisée.

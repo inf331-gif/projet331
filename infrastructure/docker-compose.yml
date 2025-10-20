@@ -1,0 +1,329 @@
+version: '3.9'
+
+networks:
+  hospital_net:
+    driver: bridge
+
+volumes:
+  postgres-auth-data:
+  postgres-medical-data:
+  postgres-ocr-data:
+  postgres-ml-data:
+  postgres-users-data:
+  postgres-blockchain-data:
+  redis-data:
+  ml-models-data:
+
+services:
+  # ===============================
+  # Base de données Auth
+  # ===============================
+  postgres-auth:
+    image: postgres:15
+    container_name: postgres-auth
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_pass
+    ports:
+      - "5432:5432"
+    networks:
+      - hospital_net
+    volumes:
+      - postgres-auth-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===============================
+  # Service Auth
+  # ===============================
+  service-auth:
+    build: ../service-auth
+    container_name: service-auth
+    env_file: ../service-auth/.env
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+    networks:
+      - hospital_net
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===============================
+  # Base de données Medical
+  # ===============================
+  postgres-medical:
+    image: postgres:15
+    container_name: postgres-medical
+    environment:
+      POSTGRES_DB: medical_db
+      POSTGRES_USER: medical_user
+      POSTGRES_PASSWORD: medical_pass
+    ports:
+      - "5433:5432"
+    networks:
+      - hospital_net
+    volumes:
+      - postgres-medical-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medical_user -d medical_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===============================
+  # Service Medical
+  # ===============================
+  service-medical:
+    build: ../service-medical
+    container_name: service-medical
+    env_file: ../service-medical/.env
+    depends_on:
+      postgres-medical:
+        condition: service_healthy
+      service-auth:
+        condition: service_healthy
+      service-utilisateurs:
+        condition: service_healthy
+    networks:
+      - hospital_net
+    ports:
+      - "8003:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===============================
+  # Base de données ML
+  # ===============================
+  postgres-ml:
+    image: postgres:15
+    container_name: postgres-ml
+    environment:
+      POSTGRES_DB: ml_db
+      POSTGRES_USER: ml_user
+      POSTGRES_PASSWORD: ml_pass
+    ports:
+      - "5436:5432"
+    networks:
+      - hospital_net
+    volumes:
+      - postgres-ml-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ml_user -d ml_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===============================
+  # Service ML
+  # ===============================
+  service-ml:
+    build: ../service-ml
+    container_name: service-ml
+    env_file: ../service-ml/.env
+    depends_on:
+      postgres-ml:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    networks:
+      - hospital_net
+    ports:
+      - "8004:8000"
+    volumes:
+      - ml-models-data:/app/models
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===============================
+  # Base de données Blockchain
+  # ===============================
+  postgres-blockchain:
+    image: postgres:15
+    container_name: postgres-blockchain
+    environment:
+      POSTGRES_DB: blockchain_db
+      POSTGRES_USER: blockchain_user
+      POSTGRES_PASSWORD: blockchain_pass
+    ports:
+      - "5437:5432"
+    networks:
+      - hospital_net
+    volumes:
+      - postgres-blockchain-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blockchain_user -d blockchain_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===============================
+  # Service Blockchain
+  # ===============================
+  service-blockchain:
+    build: ../service-blockchain
+    container_name: service-blockchain
+    env_file: ../service-blockchain/.env
+    depends_on:
+      postgres-blockchain:
+        condition: service_healthy
+    networks:
+      - hospital_net
+    ports:
+      - "8002:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===============================
+  # Base de données OCR
+  # ===============================
+  postgres-ocr:
+    image: postgres:15
+    container_name: postgres-ocr
+    environment:
+      POSTGRES_DB: ocr_db
+      POSTGRES_USER: ocr_user
+      POSTGRES_PASSWORD: ocr_pass
+    ports:
+      - "5434:5432"
+    networks:
+      - hospital_net
+    volumes:
+      - postgres-ocr-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ocr_user -d ocr_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===============================
+  # Service OCR
+  # ===============================
+  service-ocr:
+    build: ../service-ocr
+    container_name: service-ocr
+    env_file: ../service-ocr/.env
+    depends_on:
+      postgres-ocr:
+        condition: service_healthy
+    networks:
+      - hospital_net
+    ports:
+      - "8005:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===============================
+  # Base de données Utilisateurs
+  # ===============================
+  postgres-users:
+    image: postgres:15
+    container_name: postgres-users
+    environment:
+      POSTGRES_DB: users_db
+      POSTGRES_USER: users_user
+      POSTGRES_PASSWORD: users_pass
+    ports:
+      - "5435:5432"
+    networks:
+      - hospital_net
+    volumes:
+      - postgres-users-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U users_user -d users_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===============================
+  # Service Utilisateurs
+  # ===============================
+  service-utilisateurs:
+    build: ../service-utilisateurs
+    container_name: service-utilisateurs
+    env_file: ../service-utilisateurs/.env
+    depends_on:
+      postgres-users:
+        condition: service_healthy
+      service-auth:
+        condition: service_healthy
+    networks:
+      - hospital_net
+    ports:
+      - "8006:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===============================
+  # Redis Cache
+  # ===============================
+  redis-cache:
+    image: redis:7-alpine
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass redis_pass_2024 --appendonly yes
+    networks:
+      - hospital_net
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ===============================
+  # API Gateway
+  # ===============================
+  api-gateway:
+    build: ../api-gateway
+    container_name: api-gateway
+    env_file: ../api-gateway/.env
+    depends_on:
+      service-auth:
+        condition: service_healthy
+      service-medical:
+        condition: service_healthy
+      service-ml:
+        condition: service_healthy
+      service-ocr:
+        condition: service_healthy
+      service-utilisateurs:
+        condition: service_healthy
+      service-blockchain:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    networks:
+      - hospital_net
+    ports:
+      - "8080:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
